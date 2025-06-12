@@ -345,6 +345,30 @@ jobs:
           cd ultralytics
           git checkout tags/v$VERSION
           pytest tests
+          
+      - name: Test Python
+        run: |
+          python - <<EOF
+from ultralytics import YOLO
+model = YOLO('yolo11n.pt')
+model.train(data='coco8.yaml', epochs=3, imgsz=160)
+model.val(imgsz=160)
+model.predict(imgsz=160)
+model.export(format='onnx', imgsz=160)
+EOF
+
+      - name: Convert ONNX → TensorFlow with fixes
+        run: |
+          pip install onnx2tf
+          # 避免路径空格带来的潜在问题
+          mv "yolo11n.onnx" yolo11n_clean.onnx || true
+          # 转换时关闭合并优化，防止 Add 维度不对
+          onnx2tf \
+            --input_onnx_file_path yolo11n_clean.onnx \
+            --disable_opt_merge \
+            --replace_parameter "/model.2/m.0/Add,disable" \
+            --output_folder_path onnx_tf_output
+
 
   Summary:
     runs-on: ubuntu-latest
