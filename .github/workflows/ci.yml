@@ -40,8 +40,7 @@ on:
 
 jobs:
   HUB:
-    #if: github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.hub == 'true'))
-    if: true
+    if: github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.hub == 'true'))
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -94,8 +93,7 @@ jobs:
           print(json.dumps(response.json(), indent=2))
 
   Benchmarks:
-    #if: github.event_name != 'workflow_dispatch' || github.event.inputs.benchmarks == 'true'
-    if: true
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.benchmarks == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -156,8 +154,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
   Tests:
-    #if: github.event_name != 'workflow_dispatch' || github.event.inputs.tests == 'true'
-    if: true
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.tests == 'true'
     timeout-minutes: 360
     runs-on: ${{ matrix.os }}
     strategy:
@@ -212,8 +209,7 @@ jobs:
         run: uv cache prune --ci
 
   GPU:
-    #if: github.repository == 'ultralytics/ultralytics' && (github.event_name != 'workflow_dispatch' || github.event.inputs.gpu == 'true')
-    if: true
+    if: github.repository == 'ultralytics/ultralytics' && (github.event_name != 'workflow_dispatch' || github.event.inputs.gpu == 'true')
     timeout-minutes: 360
     runs-on: gpu-latest
     steps:
@@ -283,8 +279,7 @@ jobs:
       #   run: sudo bash -c "sleep 10; reboot" &
 
   Conda:
-    #if: github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event.inputs.conda == 'true')
-    if: true
+    if: github.repository == 'ultralytics/ultralytics' && (github.event_name == 'schedule' || github.event.inputs.conda == 'true')
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
