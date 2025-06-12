@@ -1,0 +1,13 @@
+path: F:\Desktop\YOLO\ultralytics-main\MyData\datasets\coco128
+train: images/train2017
+val: images/val2017
+test:
+
+# Classes
+names:
+  0: Capacitor
+  1: Diode
+  2: LED
+  3: Resistor
+  4: Transistor
+  5: Zener Diode
