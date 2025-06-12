@@ -7,36 +7,27 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-from typing import List, Optional
+
 # OpenCV Multilanguage-friendly functions ------------------------------------------------------------------------------
 _imshow = cv2.imshow  # copy to avoid recursion errors
 
 
-def imread(filename: str, flags: int = cv2.IMREAD_COLOR) -> Optional[np.ndarray]:
+def imread(filename: str, flags: int = cv2.IMREAD_COLOR):
     """
-    Read an image from a file with multilanguage filename support.
+    Read an image from a file.
 
     Args:
         filename (str): Path to the file to read.
-        flags (int, optional): Flag that can take values of cv2.IMREAD_*. Controls how the image is read.
+        flags (int): Flag that can take values of cv2.IMREAD_*. Controls how the image is read.
 
     Returns:
-        (np.ndarray | None): The read image array, or None if reading fails.
+        (np.ndarray): The read image.
 
     Examples:
         >>> img = imread("path/to/image.jpg")
         >>> img = imread("path/to/image.jpg", cv2.IMREAD_GRAYSCALE)
     """
-    file_bytes = np.fromfile(filename, np.uint8)
-    if filename.endswith((".tiff", ".tif")):
-        success, frames = cv2.imdecodemulti(file_bytes, cv2.IMREAD_UNCHANGED)
-        if success:
-            # Handle RGB images in tif/tiff format
-            return frames[0] if len(frames) == 1 and frames[0].ndim == 3 else np.stack(frames, axis=2)
-        return None
-    else:
-        im = cv2.imdecode(file_bytes, flags)
-        return im[..., None] if im.ndim == 2 else im  # Always ensure 3 dimensions
+    return cv2.imdecode(np.fromfile(filename, np.uint8), flags)
 
 
 def imwrite(filename: str, img: np.ndarray, params=None):
@@ -46,10 +37,17 @@ def imwrite(filename: str, img: np.ndarray, params=None):
     Args:
         filename (str): Path to the file to write.
         img (np.ndarray): Image to write.
-        params (list of ints, optional): Additional parameters. See OpenCV documentation.
+        params (List[int], optional): Additional parameters for image encoding.
 
     Returns:
-        (bool): True if the file was written, False otherwise.
+        (bool): True if the file was written successfully, False otherwise.
+
+    Examples:
+        >>> import numpy as np
+        >>> img = np.zeros((100, 100, 3), dtype=np.uint8)  # Create a black image
+        >>> success = imwrite("output.jpg", img)  # Write image to file
+        >>> print(success)
+        True
     """
     try:
         cv2.imencode(Path(filename).suffix, img, params)[1].tofile(filename)
@@ -60,11 +58,21 @@ def imwrite(filename: str, img: np.ndarray, params=None):
 
 def imshow(winname: str, mat: np.ndarray):
     """
-    Displays an image in the specified window.
+    Display an image in the specified window.
+
+    This function is a wrapper around OpenCV's imshow function that displays an image in a named window. It is
+    particularly useful for visualizing images during development and debugging.
 
     Args:
-        winname (str): Name of the window.
-        mat (np.ndarray): Image to be shown.
+        winname (str): Name of the window where the image will be displayed. If a window with this name already
+            exists, the image will be displayed in that window.
+        mat (np.ndarray): Image to be shown. Should be a valid numpy array representing an image.
+
+    Examples:
+        >>> import numpy as np
+        >>> img = np.zeros((300, 300, 3), dtype=np.uint8)  # Create a black image
+        >>> img[:100, :100] = [255, 0, 0]  # Add a blue square
+        >>> imshow("Example Window", img)  # Display the image
     """
     _imshow(winname.encode("unicode_escape").decode(), mat)
 
@@ -87,7 +95,7 @@ def torch_load(*args, **kwargs):
     Returns:
         (Any): The loaded PyTorch object.
 
-    Note:
+    Notes:
         For PyTorch versions 2.0 and above, this function automatically sets 'weights_only=False'
         if the argument is not provided, to avoid deprecation warnings.
     """
@@ -101,12 +109,21 @@ def torch_load(*args, **kwargs):
 
 def torch_save(*args, **kwargs):
     """
-    Optionally use dill to serialize lambda functions where pickle does not, adding robustness with 3 retries and
-    exponential standoff in case of save failure.
+    Save PyTorch objects with retry mechanism for robustness.
+
+    This function wraps torch.save with 3 retries and exponential backoff in case of save failures, which can occur
+    due to device flushing delays or antivirus scanning.
 
     Args:
-        *args (tuple): Positional arguments to pass to torch.save.
+        *args (Any): Positional arguments to pass to torch.save.
         **kwargs (Any): Keyword arguments to pass to torch.save.
+
+    Returns:
+        (Any): Result of torch.save operation if successful, None otherwise.
+
+    Examples:
+        >>> model = torch.nn.Linear(10, 1)
+        >>> torch_save(model.state_dict(), "model.pt")
     """
     for i in range(4):  # 3 retries
         try:

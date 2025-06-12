@@ -2,19 +2,19 @@
 """
 Ultralytics modules.
 
-Example:
-    Visualize a module with Netron.
-    ```python
-    from ultralytics.nn.modules import *
-    import torch
-    import os
+This module provides access to various neural network components used in Ultralytics models, including convolution blocks,
+attention mechanisms, transformer components, and detection/segmentation heads.
 
-    x = torch.ones(1, 128, 40, 40)
-    m = Conv(128, 128)
-    f = f"{m._get_name()}.onnx"
-    torch.onnx.export(m, x, f)
-    os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
-    ```
+Examples:
+    Visualize a module with Netron.
+    >>> from ultralytics.nn.modules import *
+    >>> import torch
+    >>> import os
+    >>> x = torch.ones(1, 128, 40, 40)
+    >>> m = Conv(128, 128)
+    >>> f = f"{m._get_name()}.onnx"
+    >>> torch.onnx.export(m, x, f)
+    >>> os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
 """
 
 from .block import (
@@ -25,17 +25,12 @@ from .block import (
     C3TR,
     CIB,
     DFL,
-    ELAN1,ELAN_t,ELAN_H,ELAN,SPPCSPCSIM,SPPCSPC,MP_2,MP_1,YOLOv4_BottleneckCSP,YOLOv4_Bottleneck,
-    PSA,CrossAttentionShared, CrossMLCA , TensorSelector,CrossMLCAv2,DeepDiverseBranchBlock,RecursionDiverseBranchBlock,
-    C3k2_DeepDBB,C3k2_DBB,C3k2_WDBB,C2f_DeepDBB,C2f_WDBB,C2f_DBB,C3k_RDBB,C2f_RDBB,C3k2_RDBB,A2C2f,
-    ConvNormLayer, BasicBlock, BottleNeck,Blocks,
-    GPT,Add2,Add,CrossTransformerFusion,
-    MANet, HyperComputeModule, MANet_FasterBlock, MANet_FasterCGLU, MANet_Star,
-    CrossC2f ,  CrossC3k2,
-    CBH , ES_Bottleneck, DWConvblock,ADD,
+    ELAN1,
+    PSA,
     SPP,
     SPPELAN,
     SPPF,
+    A2C2f,
     AConv,
     ADown,
     Attention,
@@ -56,6 +51,7 @@ from .block import (
     HGBlock,
     HGStem,
     ImagePoolingAttn,
+    MaxSigmoidAttnBlock,
     Proto,
     RepC3,
     RepNCSPELAN4,
@@ -78,13 +74,21 @@ from .conv import (
     Index,
     LightConv,
     RepConv,
-    SpatialAttention,Silence,SilenceChannel,ChannelToNumber,NumberToChannel,
-
+    SpatialAttention,
 )
-
-from .rep_block import  DiverseBranchBlock, WideDiverseBranchBlock, DeepDiverseBranchBlock,FeaturePyramidAggregationAttention,SilenceLayer
-
-from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, WorldDetect, v10Detect, DetectDeepDBB, DetectWDBB,DetectV8,DetectAux,Detect_LSCD, Segment_LSCD, Pose_LSCD, OBB_LSCD
+from .head import (
+    OBB,
+    Classify,
+    Detect,
+    LRPCHead,
+    Pose,
+    RTDETRDecoder,
+    Segment,
+    WorldDetect,
+    YOLOEDetect,
+    YOLOESegment,
+    v10Detect,
+)
 from .transformer import (
     AIFI,
     MLP,
@@ -137,7 +141,7 @@ __all__ = (
     "Bottleneck",
     "BottleneckCSP",
     "Proto",
-    "Detect",'DetectAux',
+    "Detect",
     "Segment",
     "Pose",
     "Classify",
@@ -152,8 +156,12 @@ __all__ = (
     "ResNetLayer",
     "OBB",
     "WorldDetect",
+    "YOLOEDetect",
+    "YOLOESegment",
     "v10Detect",
+    "LRPCHead",
     "ImagePoolingAttn",
+    "MaxSigmoidAttnBlock",
     "ContrastiveHead",
     "BNContrastiveHead",
     "RepNCSPELAN4",
@@ -162,22 +170,13 @@ __all__ = (
     "CBFuse",
     "CBLinear",
     "AConv",
-    "ELAN1","ELAN","ELAN_H",'MP_1','MP_2','ELAN_t','SPPCSPCSIM','SPPCSPC',
+    "ELAN1",
     "RepVGGDW",
     "CIB",
     "C2fCIB",
     "Attention",
     "PSA",
     "TorchVision",
-    "Index", 'Silence','SilenceChannel','ChannelToNumber','NumberToChannel',
-    'DiverseBranchBlock', 'WideDiverseBranchBlock', 'DeepDiverseBranchBlock','FeaturePyramidAggregationAttention','SilenceLayer',
-    "CrossAttentionShared","CrossMLCA","TensorSelector","CrossMLCAv2",'YOLOv4_BottleneckCSP','YOLOv4_Bottleneck',
-    'DiverseBranchBlock', 'WideDiverseBranchBlock', 'DeepDiverseBranchBlock','FeaturePyramidAggregationAttention',
-    "C3k2_DeepDBB","C3k2_DBB","C3k2_WDBB",'C2f_DeepDBB','C2f_WDBB','C2f_DBB','C3k_RDBB','C2f_RDBB','C3k2_RDBB','A2C2f',
-    'ConvNormLayer', 'BasicBlock', 'BottleNeck', 'Blocks',
-    "CrossC2f", "CrossC3k2",
-    "CBH","ES_Bottleneck","DWConvblock","ADD",
-    'MANet', 'HyperComputeModule', 'MANet_FasterBlock', 'MANet_FasterCGLU', 'MANet_Star',
-
-    "GPT","Add2","Add","CrossTransformerFusion",
+    "Index",
+    "A2C2f",
 )

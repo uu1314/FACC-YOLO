@@ -19,7 +19,7 @@ from ultralytics.data.utils import FORMATS_HELP_MSG, IMG_FORMATS, VID_FORMATS
 from ultralytics.utils import IS_COLAB, IS_KAGGLE, LOGGER, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.patches import imread
-from ultralytics.data.base import SimOTM,SimOTMBBS,SimOTMSSS
+
 
 @dataclass
 class SourceTypes:
@@ -33,6 +33,7 @@ class SourceTypes:
         stream (bool): Flag indicating if the input source is a video stream.
         screenshot (bool): Flag indicating if the input source is a screenshot.
         from_img (bool): Flag indicating if the input source is an image file.
+        tensor (bool): Flag indicating if the input source is a tensor.
 
     Examples:
         >>> source_types = SourceTypes(stream=True, screenshot=False, from_img=False)
@@ -106,7 +107,7 @@ class LoadStreams:
         self.caps = [None] * n  # video capture objects
         self.imgs = [[] for _ in range(n)]  # images
         self.shape = [[] for _ in range(n)]  # image shapes
-        self.sources = [ops.clean_str(x) for x in sources]  # clean source names for later
+        self.sources = [ops.clean_str(x).replace(os.sep, "_") for x in sources]  # clean source names for later
         for i, s in enumerate(sources):  # index, source
             # Start thread to read frames from video stream
             st = f"{i + 1}/{n}: {s}... "
@@ -320,12 +321,9 @@ class LoadImagesAndVideos:
         - Can read from a text file containing paths to images and videos.
     """
 
-    def __init__(self, path, batch=1, vid_stride=1,use_simotm="SimOTMBBS",imgsz=640):
+    def __init__(self, path, batch=1, vid_stride=1):
         """Initialize dataloader for images and videos, supporting various input formats."""
         parent = None
-        self.use_simotm = use_simotm
-        self.imgsz=imgsz
-        self.augment=False
         if isinstance(path, str) and Path(path).suffix == ".txt":  # *.txt file with img/vid/dir on each line
             parent = Path(path).parent
             path = Path(path).read_text().splitlines()  # list of sources
@@ -364,7 +362,6 @@ class LoadImagesAndVideos:
             self._new_video(videos[0])  # new video
         else:
             self.cap = None
-            self.ir_cap = None
         if self.nf == 0:
             raise FileNotFoundError(f"No images or videos found in {p}. {FORMATS_HELP_MSG}")
 
@@ -374,7 +371,7 @@ class LoadImagesAndVideos:
         return self
 
     def __next__(self):
-        """Returns the next batch of images or video frames along with their paths and metadata."""
+        """Returns the next batch of images or video frames with their paths and metadata."""
         paths, imgs, info = [], [], []
         while len(imgs) < self.bs:
             if self.count >= self.nf:  # end of file list
@@ -389,125 +386,14 @@ class LoadImagesAndVideos:
                 if not self.cap or not self.cap.isOpened():
                     self._new_video(path)
 
+                success = False
                 for _ in range(self.vid_stride):
                     success = self.cap.grab()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") :
-                        success =   success  and self.ir_cap.grab()
                     if not success:
                         break  # end of video or failure
 
                 if success:
                     success, im0 = self.cap.retrieve()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") :
-                        success_ir,im0_ir=self.ir_cap.retrieve()
-                        success=success and success_ir
-                        if success:
-                            if self.use_simotm == 'RGBT':
-                                im_visible = im0  # BGR
-                                im_infrared = im0_ir  # BGR
-
-                                if len(im_infrared.shape) == 2:
-                                    # print("单通道（灰度图）")
-                                    pass
-                                    # im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_GRAY2BGR)
-                                elif len(im_infrared.shape) == 3 and im_infrared.shape[2] == 3:
-                                    im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_BGR2GRAY)
-                                else:
-                                    success=False
-                                    print("未知格式")
-
-                                if success:
-                                    h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
-
-                                    if h_vis != h_inf or w_vis != w_inf:
-                                        r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
-                                        r_inf = self.imgsz / max(h_inf, w_inf)  # ratio
-                                        if r_vis != 1:  # if sizes are not equal
-                                            interp = cv2.INTER_LINEAR if (self.augment or r_vis > 1) else cv2.INTER_AREA
-                                            im_visible = cv2.resize(im_visible, (
-                                                min(math.ceil(w_vis * r_vis), self.imgsz),
-                                                min(math.ceil(h_vis * r_vis), self.imgsz)),
-                                                                    interpolation=interp)
-                                        if r_inf != 1:  # if sizes are not equal
-                                            interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                                            im_infrared = cv2.resize(im_infrared, (
-                                                min(math.ceil(w_inf * r_inf), self.imgsz),
-                                                min(math.ceil(h_inf * r_inf), self.imgsz)),
-                                                                     interpolation=interp)
-
-                                    # 将彩色图像的三个通道分离
-                                    b, g, r = cv2.split(im_visible)
-                                    # 合并成四通道图像
-                                    im0 = cv2.merge((b, g, r, im_infrared))
-                            elif self.use_simotm == 'RGBRGB6C':
-                                # im_visible = cv2.imread(path)  # BGR
-                                # im_infrared = cv2.imread(path.replace('visible', 'infrared'))  # BGR
-                                im_visible = im0  # BGR
-                                im_infrared = im0_ir  # BGR
-                                if len(im_infrared.shape) == 2:
-                                    # print("单通道（灰度图）")
-                                    # pass
-                                    im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_GRAY2BGR)
-                                elif len(im_infrared.shape) == 3 and im_infrared.shape[2] == 3:
-                                    # im_infrared = cv2.cvtColor(im_infrared, cv2.COLOR_BGR2GRAY)
-                                    pass
-                                else:
-                                    success=False
-                                    print("未知格式")
-
-                                if success:
-                                    h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
-
-                                    if h_vis != h_inf or w_vis != w_inf:
-
-                                        r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
-                                        r_inf = self.imgsz / max(h_inf, w_inf)  # ratio
-                                        if r_vis != 1:  # if sizes are not equal
-                                            interp = cv2.INTER_LINEAR if (self.augment or r_vis > 1) else cv2.INTER_AREA
-                                            im_visible = cv2.resize(im_visible, (
-                                                min(math.ceil(w_vis * r_vis), self.imgsz),
-                                                min(math.ceil(h_vis * r_vis), self.imgsz)),
-                                                                    interpolation=interp)
-                                        if r_inf != 1:  # if sizes are not equal
-                                            interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                                            im_infrared = cv2.resize(im_infrared, (
-                                                min(math.ceil(w_inf * r_inf), self.imgsz),
-                                                min(math.ceil(h_inf * r_inf), self.imgsz)),
-                                                                     interpolation=interp)
-
-                                    # 将彩色图像的三个通道分离
-                                    b, g, r = cv2.split(im_visible)
-                                    b2, g2, r2 = cv2.split(im_infrared)
-                                    # 合并成6通道图像
-                                    im0 = cv2.merge((b, g, r, b2, g2, r2))
-
-                    elif self.use_simotm == 'Gray2BGR':
-                        im0 = cv2.imread(path)  # BGR
-                    elif self.use_simotm == 'SimOTM':
-                        im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                        im0 = SimOTM(im0)
-                    elif self.use_simotm == 'SimOTMBBS':
-                        im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                        im0 = SimOTMBBS(im0)
-                    elif self.use_simotm == 'Gray':
-                        im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                    elif self.use_simotm == 'Gray16bit':
-                        im0 = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # GRAY
-                        im0 = im0.astype(np.float32)
-                    elif self.use_simotm == 'SimOTMSSS':
-                        im0 = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # TIF 16bit
-                        im0 = im0.astype(np.float32)
-                        im0 = SimOTMSSS(im0)
-                    elif self.use_simotm == 'Multispectral':
-                        im0 = imread(path, cv2.IMREAD_COLOR)  # Multispectral
-                    else:
-                        pass
-
-
-
-
                     if success:
                         self.frame += 1
                         paths.append(path)
@@ -521,88 +407,22 @@ class LoadImagesAndVideos:
                     self.count += 1
                     if self.cap:
                         self.cap.release()
-                    if  self.use_simotm in ("RGBT","RGBRGB6C") and self.ir_cap:
-                        self.ir_cap.release()
                     if self.count < self.nf:
                         self._new_video(self.files[self.count])
             else:
+                # Handle image files (including HEIC)
                 self.mode = "image"
-                # im0 = cv2.imread(path)  # BGR
-                if self.use_simotm == 'Gray2BGR':
-                    im0 = cv2.imread(path)  # BGR
-                elif self.use_simotm == 'SimOTM':
-                    im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                    im0 = SimOTM(im0)
-                elif self.use_simotm == 'SimOTMBBS':
-                    im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                    im0 = SimOTMBBS(im0)
-                elif self.use_simotm == 'Gray':
-                    im0 = cv2.imread(path, cv2.IMREAD_GRAYSCALE)  # GRAY
-                elif self.use_simotm == 'Gray16bit':
-                    im0 = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # GRAY
-                    im0 = im0.astype(np.float32)
-                elif self.use_simotm == 'SimOTMSSS':
-                    im0 = cv2.imread(path, cv2.IMREAD_UNCHANGED)  # TIF 16bit
-                    im0 = im0.astype(np.float32)
-                    im0 = SimOTMSSS(im0)
-                elif self.use_simotm == 'Multispectral':
-                    im0 = imread(path, cv2.IMREAD_COLOR)  # Multispectral
-                    print(im0.shape)
-                elif self.use_simotm == 'RGBT':
-                    im_visible = cv2.imread(path)  # BGR
-                    im_infrared = cv2.imread(path.replace('visible', 'infrared'), cv2.IMREAD_GRAYSCALE)  # BGR
+                if path.split(".")[-1].lower() == "heic":
+                    # Load HEIC image using Pillow with pillow-heif
+                    check_requirements("pillow-heif")
 
-                    h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
+                    from pillow_heif import register_heif_opener
 
-                    if h_vis != h_inf or w_vis != w_inf:
-                        r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
-                        r_inf = self.imgsz / max(h_inf, w_inf)  # ratio
-                        # print(self.imgsz)
-                        if r_vis != 1:  # if sizes are not equal
-                            interp = cv2.INTER_LINEAR if (self.augment or r_vis > 1) else cv2.INTER_AREA
-                            im_visible = cv2.resize(im_visible, (
-                                min(math.ceil(w_vis * r_vis), self.imgsz), min(math.ceil(h_vis * r_vis), self.imgsz)),
-                                                    interpolation=interp)
-                        if r_inf != 1:  # if sizes are not equal
-                            interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                            im_infrared = cv2.resize(im_infrared, (
-                                min(math.ceil(w_inf * r_inf), self.imgsz), min(math.ceil(h_inf * r_inf), self.imgsz)),
-                                                     interpolation=interp)
-
-                    # 将彩色图像的三个通道分离
-                    b, g, r = cv2.split(im_visible)
-                    # 合并成四通道图像
-                    im0 = cv2.merge((b, g, r, im_infrared))
-                elif self.use_simotm == 'RGBRGB6C':
-                    im_visible = cv2.imread(path)  # BGR
-                    im_infrared = cv2.imread(path.replace('visible', 'infrared'))  # BGR
-
-                    h_vis, w_vis = im_visible.shape[:2]  # orig hw
-                    h_inf, w_inf = im_infrared.shape[:2]  # orig hw
-
-                    if h_vis != h_inf or w_vis != w_inf:
-
-                        r_vis = self.imgsz / max(h_vis, w_vis)  # ratio
-                        r_inf = self.imgsz / max(h_inf, w_inf)  # ratio
-                        if r_vis != 1:  # if sizes are not equal
-                            interp = cv2.INTER_LINEAR if (self.augment or r_vis > 1) else cv2.INTER_AREA
-                            im_visible = cv2.resize(im_visible, (
-                                min(math.ceil(w_vis * r_vis), self.imgsz), min(math.ceil(h_vis * r_vis), self.imgsz)),
-                                                    interpolation=interp)
-                        if r_inf != 1:  # if sizes are not equal
-                            interp = cv2.INTER_LINEAR if (self.augment or r_inf > 1) else cv2.INTER_AREA
-                            im_infrared = cv2.resize(im_infrared, (
-                                min(math.ceil(w_inf * r_inf), self.imgsz), min(math.ceil(h_inf * r_inf), self.imgsz)),
-                                                     interpolation=interp)
-
-                    # 将彩色图像的三个通道分离
-                    b, g, r = cv2.split(im_visible)
-                    b2, g2, r2 = cv2.split(im_infrared)
-                    # 合并成6通道图像
-                    im0 = cv2.merge((b, g, r, b2, g2, r2))
+                    register_heif_opener()  # Register HEIF opener with Pillow
+                    with Image.open(path) as img:
+                        im0 = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)  # convert image to BGR nparray
                 else:
-                    im0 = cv2.imread(path)  # BGR
+                    im0 = imread(path)  # BGR
                 if im0 is None:
                     LOGGER.warning(f"WARNING ⚠️ Image Read Error {path}")
                 else:
@@ -612,105 +432,16 @@ class LoadImagesAndVideos:
                 self.count += 1  # move to the next file
                 if self.count >= self.ni:  # end of image list
                     break
-        # print(paths)
+
         return paths, imgs, info
-    # def __next__(self):
-    #     """Returns the next batch of images or video frames with their paths and metadata."""
-    #     paths, imgs, info = [], [], []
-    #     while len(imgs) < self.bs:
-    #         if self.count >= self.nf:  # end of file list
-    #             if imgs:
-    #                 return paths, imgs, info  # return last partial batch
-    #             else:
-    #                 raise StopIteration
-    #
-    #         path = self.files[self.count]
-    #         if self.video_flag[self.count]:
-    #             self.mode = "video"
-    #             if not self.cap or not self.cap.isOpened():
-    #                 self._new_video(path)
-    #
-    #             success = False
-    #             for _ in range(self.vid_stride):
-    #                 success = self.cap.grab()
-    #                 if not success:
-    #                     break  # end of video or failure
-    #
-    #             if success:
-    #                 success, im0 = self.cap.retrieve()
-    #                 if success:
-    #                     self.frame += 1
-    #                     paths.append(path)
-    #                     imgs.append(im0)
-    #                     info.append(f"video {self.count + 1}/{self.nf} (frame {self.frame}/{self.frames}) {path}: ")
-    #                     if self.frame == self.frames:  # end of video
-    #                         self.count += 1
-    #                         self.cap.release()
-    #             else:
-    #                 # Move to the next file if the current video ended or failed to open
-    #                 self.count += 1
-    #                 if self.cap:
-    #                     self.cap.release()
-    #                 if self.count < self.nf:
-    #                     self._new_video(self.files[self.count])
-    #         else:
-    #             # Handle image files (including HEIC)
-    #             self.mode = "image"
-    #             if path.split(".")[-1].lower() == "heic":
-    #                 # Load HEIC image using Pillow with pillow-heif
-    #                 check_requirements("pillow-heif")
-    #
-    #                 from pillow_heif import register_heif_opener
-    #
-    #                 register_heif_opener()  # Register HEIF opener with Pillow
-    #                 with Image.open(path) as img:
-    #                     im0 = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)  # convert image to BGR nparray
-    #             else:
-    #                 im0 = imread(path)  # BGR
-    #             if im0 is None:
-    #                 LOGGER.warning(f"WARNING ⚠️ Image Read Error {path}")
-    #             else:
-    #                 paths.append(path)
-    #                 imgs.append(im0)
-    #                 info.append(f"image {self.count + 1}/{self.nf} {path}: ")
-    #             self.count += 1  # move to the next file
-    #             if self.count >= self.ni:  # end of image list
-    #                 break
-    #
-    #     return paths, imgs, info
 
-    # def _new_video(self, path):
-    #     """Creates a new video capture object for the given path and initializes video-related attributes."""
-    #     self.frame = 0
-    #     self.cap = cv2.VideoCapture(path)
-    #     self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-    #     if not self.cap.isOpened():
-    #         raise FileNotFoundError(f"Failed to open video {path}")
-    #     self.frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.vid_stride)
     def _new_video(self, path):
-        """
-        Creates new video capture objects for the given RGB and optional IR video paths,
-        and initializes video-related attributes.
-        """
+        """Creates a new video capture object for the given path and initializes video-related attributes."""
         self.frame = 0
-
-        rgb_path =path
-        ir_path=rgb_path.replace('visible','infrared')
-        # Initialize RGB video capture
-        self.cap = cv2.VideoCapture(rgb_path)
-        if not self.cap.isOpened():
-            raise FileNotFoundError(f"Failed to open RGB video {rgb_path}")
-
-        # Initialize IR video capture if IR path is provided
-        self.ir_cap = None
-        if self.use_simotm in ("RGBT","RGBRGB6C"):
-            if ir_path:
-                self.ir_cap = cv2.VideoCapture(ir_path)
-                if not self.ir_cap.isOpened():
-                    raise FileNotFoundError(f"Failed to open IR video {ir_path}")
-
-        # Get video properties from RGB video (assuming RGB and IR videos have the same properties)
+        self.cap = cv2.VideoCapture(path)
         self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+        if not self.cap.isOpened():
+            raise FileNotFoundError(f"Failed to open video {path}")
         self.frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT) / self.vid_stride)
 
     def __len__(self):

@@ -26,5 +26,4 @@ __all__ = (
     "SegmentationModel",
     "ClassificationModel",
     "BaseModel",
-
 )
